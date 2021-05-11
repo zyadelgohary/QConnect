@@ -1,0 +1,31 @@
+{
+  "name": "RNVoiceRecorder",
+  "version": "1.0.1",
+  "summary": "React Native: Native Voice Recorder",
+  "description": "React Native: Native Voice Recorder",
+  "homepage": "https://github.com/prscX/react-native-voice-recorder.git",
+  "license": "Apache License 2.0",
+  "authors": {
+    "name": "Pranav Raj Singh Chauhan"
+  },
+  "source": {
+    "git": "https://github.com/prscX/react-native-voice-recorder.git",
+    "tag": "1.0.1"
+  },
+  "platforms": {
+    "ios": "8.0"
+  },
+  "preserve_paths": [
+    "LICENSE",
+    "package.json"
+  ],
+  "source_files": "**/*.{h,m}",
+  "dependencies": {
+    "React": [
+
+    ],
+    "IQAudioRecorderController": [
+
+    ]
+  }
+}

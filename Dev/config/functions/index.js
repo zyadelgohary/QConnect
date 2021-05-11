@@ -16,7 +16,6 @@ const firestore = admin.firestore();
 const Teachers = firestore.collection('Teachers');
 const Classes = firestore.collection('Classes');
 const Students = firestore.collection('Students');
-const batch = firestore.batch();
 
 // -------------------------- Document Creators, Getters, and Updaters --------------------------
 
@@ -24,6 +23,8 @@ const batch = firestore.batch();
 //the Teachers collection.
 exports.createTeacher = functions.https.onCall(async (input, context) => {
 	const { emailAddress, name, phoneNumber, profileImageID, teacherID } = input;
+
+	const batch = firestore.batch();
 
 	batch.create(Teachers.doc(teacherID), {
 		classIDs: [],
@@ -45,6 +46,7 @@ exports.createTeacher = functions.https.onCall(async (input, context) => {
 exports.createStudent = functions.https.onCall(async (input, context) => {
 	const { emailAddress, isManual, name, phoneNumber, profileImageID, studentID } = input;
 
+	const batch = firestore.batch();
 	if (isManual === false) {
 		batch.create(Students.doc(studentID), {
 			classIDs: [],
@@ -58,14 +60,14 @@ exports.createStudent = functions.https.onCall(async (input, context) => {
 		});
 		await batch.commit();
 
-		return 0;
+		return studentID;
 	} else {
 		const { classID, classInviteCode } = isManual;
 		const newDocument = await Students.add({
 			classIDs: [classID],
 			currentClassID: classID,
 			emailAddress,
-			isManual,
+			isManual: true,
 			name,
 			phoneNumber,
 			profileImageID,
@@ -77,12 +79,12 @@ exports.createStudent = functions.https.onCall(async (input, context) => {
 
 		await joinClassByClassInviteCode(classInviteCode, docID);
 
-		return 0;
+		return newDocument.id;
 	}
 });
 
 //Method takes in all the required information to create a class document, and adds it to Cloud Firestore under
-//the Classes collection.
+//the Classes collection. Returns the new class ID
 exports.createClass = functions.https.onCall(async (input, context) => {
 	const { classImageID, className, teacherID } = input;
 
@@ -106,7 +108,7 @@ exports.createClass = functions.https.onCall(async (input, context) => {
 			classIDs: admin.firestore.FieldValue.arrayUnion(newClassDocument.id),
 			currentClassID: newClassDocument.id,
 		});
-		return 0;
+		return newClassDocument.id;
 	});
 
 	return result;
@@ -162,8 +164,52 @@ exports.getClassByID = functions.https.onCall(async (input, context) => {
 	return result;
 });
 
-//Method takes in a class ID and a student ID and returns that studen's information specific to that class. If the document
-//doesn't exist, the method returns -1
+// Method takes in a teacherID and returns an array of class documents that belong to that specific teacher
+exports.getClassesByTeacherID = functions.https.onCall(async (input, context) => {
+	const { teacherID } = input;
+
+	const result = await firestore.runTransaction(async (transaction) => {
+		const teacherDocument = (await transaction.get(Teachers.doc(teacherID))).data();
+
+		const promises = [];
+		for (classID of teacherDocument.classIDs) {
+			promises.push(transaction.get(Classes.doc(classID)));
+		}
+
+		let finalArray = await Promise.all(promises);
+
+		finalArray = finalArray.map((classDoc) => classDoc.data());
+
+		return finalArray;
+	});
+
+	return result;
+});
+
+// Method takes in a studentID and returns an array of class documents that belong to that specific student
+exports.getClassesByStudentID = functions.https.onCall(async (input, context) => {
+	const { studentID } = input;
+
+	const result = await firestore.runTransaction(async (transaction) => {
+		const studentDocument = (await transaction.get(Students.doc(studentID))).data();
+
+		const promises = [];
+		for (classID of studentDocument.classIDs) {
+			promises.push(transaction.get(Classes.doc(classID)));
+		}
+
+		let finalArray = await Promise.all(promises);
+
+		finalArray = finalArray.map((classDoc) => classDoc.data());
+
+		return finalArray;
+	});
+
+	return result;
+});
+
+// Method takes in a class ID and a student ID and returns that studen's information specific to that class. If the document
+// doesn't exist, the method returns -1
 exports.getStudentByClassID = functions.https.onCall(async (input, context) => {
 	const { classID, studentID } = input;
 
@@ -182,6 +228,32 @@ exports.getStudentByClassID = functions.https.onCall(async (input, context) => {
 
 	return result;
 });
+
+// This method is going to take in a classID and is going to return all the class-level student objects
+// that are appended with an array called "currentAssignments" which will contain the assignment documents
+// for the specified student
+exports.getStudentsWithCurrentAssignmentsByClassID = functions.https.onCall(
+	async (input, context) => {
+		const { classID } = input;
+
+		const result = await firestore.runTransaction(async (transaction) => {
+			const promises = [];
+
+			const classLevelStudents = Classes.doc(classID).collection('Students');
+			const collectionDocuments = await classLevelStudents.listDocuments();
+
+			for (const document of collectionDocuments) {
+				promises.push(getStudentWithCurrentAssignmentsByStudentID(document.id, classID));
+			}
+
+			const finalArray = await Promise.all(promises);
+
+			return finalArray;
+		});
+
+		return result;
+	}
+);
 
 //This method is going to take an object containing updates and a teacherID. Then it will update the teacher document
 //in Cloud Firestore. If, based on the updates, the Teacher Object also needs to updated in other locations where data
@@ -218,6 +290,7 @@ exports.updateTeacherByID = functions.https.onCall(async (input, context) => {
 			await transaction.update(Teachers.doc(teacherID), updates);
 		});
 	} else {
+		const batch = firestore.batch();
 		batch.update(Teachers.doc(teacherID), updates);
 		await batch.commit();
 	}
@@ -276,6 +349,7 @@ exports.updateStudentByID = functions.https.onCall(async (input, context) => {
 			await transaction.update(Students.doc(studentID), updates);
 		});
 	} else {
+		const batch = firestore.batch();
 		batch.update(Students.doc(studentID), updates);
 		await batch.commit();
 	}
@@ -287,7 +361,7 @@ exports.updateStudentByID = functions.https.onCall(async (input, context) => {
 //in Cloud Firestore.
 exports.updateClassByID = functions.https.onCall(async (input, context) => {
 	const { classID, updates } = input;
-
+	const batch = firestore.batch();
 	batch.update(Classes.doc(classID), updates);
 	await batch.commit();
 	return 0;
@@ -364,22 +438,25 @@ exports.disconnectStudentFromClass = functions.https.onCall(async (input, contex
 			}),
 		});
 
-		await transaction.update(Students.doc(studentID), {
-			classIDs: admin.firestore.FieldValue.arrayRemove(classID),
-		});
-
-		if (studentDocument.currentClassID === classID) {
-			if (studentDocument.classIDs.length > 1) {
-				const classIDToUpdateTo = studentDocument.classIDs.find(
-					(newClassIDs) => newClassIDs !== classID
-				);
-				await transaction.update(Students.doc(studentID), {
-					currentClassID: classIDToUpdateTo,
-				});
-			} else {
-				await transaction.update(Students.doc(studentID), {
-					currentClassID: '',
-				});
+		if (studentDocument.isManual === true) {
+			await transaction.delete(Students.doc(studentID));
+		} else {
+			await transaction.update(Students.doc(studentID), {
+				classIDs: admin.firestore.FieldValue.arrayRemove(classID),
+			});
+			if (studentDocument.currentClassID === classID) {
+				if (studentDocument.classIDs.length > 1) {
+					const classIDToUpdateTo = studentDocument.classIDs.find(
+						(newClassIDs) => newClassIDs !== classID
+					);
+					await transaction.update(Students.doc(studentID), {
+						currentClassID: classIDToUpdateTo,
+					});
+				} else {
+					await transaction.update(Students.doc(studentID), {
+						currentClassID: '',
+					});
+				}
 			}
 		}
 
@@ -667,7 +744,6 @@ exports.addPracticeLogForStudentByWeek = functions.https.onCall(async (input, co
 //If there is no log for that week i.e. the document doesn't exist, the function will return -1
 exports.getPracticeLogForStudentByWeek = functions.https.onCall(async (input, context) => {
 	const { studentID, classID, day } = input;
-
 	const result = await firestore.runTransaction(async (transaction) => {
 		const document = await transaction.get(
 			Classes.doc(classID)
@@ -881,7 +957,7 @@ const joinClassByClassInviteCode = async (classInviteCode, studentID) => {
 			);
 		}
 
-		return 0;
+		return classDocument.classID;
 	});
 
 	return result;
@@ -917,4 +993,45 @@ const addAssignmentByStudentID = async (classID, studentID, location, name, type
 
 	sendNotification(studentID, 'New Assignment', 'Your teacher has added a new assignment for you.');
 	return newDocument.id;
+};
+
+// This global function is going to take in a student ID and a class ID and is going to return that student's object
+// along with array titled currentAssignments, containing the student's current assignments.
+const getStudentWithCurrentAssignmentsByStudentID = async (studentID, classID) => {
+	const studentDocument = Classes.doc(classID)
+		.collection('Students')
+		.doc(studentID);
+	const assignmentsNeedHelp = studentDocument
+		.collection('Assignments')
+		.where('status', '==', 'NEED_HELP')
+		.get();
+	const assignmentsReady = studentDocument
+		.collection('Assignments')
+		.where('status', '==', 'READY')
+		.get();
+	const assignmentsWorkingOnIt = studentDocument
+		.collection('Assignments')
+		.where('status', '==', 'WORKING_ON_IT')
+		.get();
+	const assignmentsNotStarted = studentDocument
+		.collection('Assignments')
+		.where('status', '==', 'NOT_STARTED')
+		.get();
+
+	const functionResults = await Promise.all([
+		studentDocument.get(),
+		assignmentsNeedHelp,
+		assignmentsReady,
+		assignmentsWorkingOnIt,
+		assignmentsNotStarted,
+	]);
+
+	const studentObject = functionResults[0].data();
+	studentObject.currentAssignments = functionResults[1].docs
+		.map((doc) => doc.data())
+		.concat(functionResults[2].docs.map((doc) => doc.data()))
+		.concat(functionResults[3].docs.map((doc) => doc.data()))
+		.concat(functionResults[4].docs.map((doc) => doc.data()));
+
+	return studentObject;
 };

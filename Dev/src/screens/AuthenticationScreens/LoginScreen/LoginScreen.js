@@ -51,7 +51,8 @@ const LoginScreen = (props) => {
 				} else {
 					FirebaseFunctions.logEvent('TEACHER_LOG_IN');
 					props.navigation.push('TeacherCurrentClass', {
-						userID,
+						teacherID: userID,
+						classID: isTeacher.currentClassID
 					});
 				}
 			}

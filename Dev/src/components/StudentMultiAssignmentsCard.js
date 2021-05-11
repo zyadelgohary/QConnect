@@ -37,21 +37,21 @@ export default class StudentMultiAssignmentsCard extends FontLoadingComponent {
     } = this.props;
 
     let assignmentTypes = [];
-    assignmentTypes[strings.Memorization] = {
+    assignmentTypes['memorization'] = {
       color: colors.darkGreen,
       iconName: 'brain',
       iconType: 'material-community',
       name: strings.Memorize
     };
 
-    assignmentTypes[strings.Reading] = {
+    assignmentTypes['read'] = {
       color: colors.magenta,
       iconName: 'book-open',
       iconType: 'feather',
       name: strings.Read
     };
 
-    assignmentTypes[strings.Revision] = {
+    assignmentTypes['revision'] = {
       color: colors.blue,
       iconName: 'redo',
       iconType: 'evilicon',
@@ -94,7 +94,7 @@ export default class StudentMultiAssignmentsCard extends FontLoadingComponent {
               rightTitleStyle={[fontStyles.smallestTextStyleDarkGrey]}
             />
           </View>
-          {currentAssignments && currentAssignments.length > 0 && (
+          {currentAssignments.length > 0 && (
             <View
               style={{
                 flexDirection: 'row',
@@ -109,10 +109,10 @@ export default class StudentMultiAssignmentsCard extends FontLoadingComponent {
               </Text>
             </View>
           )}
-          {currentAssignments && currentAssignments.length > 0 ? (
+          {currentAssignments.length > 0 ? (
             currentAssignments.map((assignment, index) => (
               <TouchableOpacity
-                onPress={() => this.props.onAssignmentPress(index)}
+                onPress={() => this.props.onAssignmentPress(assignment.assignmentID)}
               >
                 <ListItem
                   key={assignment.name}
@@ -122,21 +122,21 @@ export default class StudentMultiAssignmentsCard extends FontLoadingComponent {
                     { flex: 1 },
                   ]}
                   subtitle={
-                    assignment.isReadyEnum === "NEED_HELP"
+                    assignment.status === "NEED_HELP"
                       ? strings.NeedHelpNonCap
-                      : assignment.isReadyEnum === "READY"
+                      : assignment.status === "READY"
                       ? strings.ReadyNonCap
-                      : assignment.isReadyEnum === "WORKING_ON_IT"
+                      : assignment.status === "WORKING_ON_IT"
                       ? strings.WorkingOnItNonCap
                       : undefined
                   }
                   subtitleStyle={[
                     fontStyles.smallTextStyleDarkGrey,
-                    assignment.isReadyEnum === "NEED_HELP"
+                    assignment.status === "NEED_HELP"
                       ? { color: colors.darkRed }
-                      : assignment.isReadyEnum === "READY"
+                      : assignment.status === "READY"
                       ? { color: colors.darkGreen }
-                      : assignment.isReadyEnum === "WORKING_ON_IT"
+                      : assignment.status === "WORKING_ON_IT"
                       ? { color: colors.primaryDark }
                       : {}
                   ]}

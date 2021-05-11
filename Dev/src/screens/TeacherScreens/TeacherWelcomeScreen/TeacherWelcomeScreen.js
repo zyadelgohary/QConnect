@@ -101,7 +101,7 @@ const TeacherWelcomeScreen = (props) => {
 				});
 
 				props.navigation.push('TeacherCurrentClass', {
-					userID: ID,
+					teacherID: ID,
 				});
 			} catch (err) {
 				if (err && err.message) {

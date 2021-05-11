@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, StatusBar, View } from 'react-native';
-import FirebaseFunctions from 'config/FirebaseFunctions';
+import FirebaseFunctions from '../../../config/FirebaseFunctions';
 import QCView from 'components/QCView';
 import screenStyle from 'config/screenStyle';
 import OfflineEmptyState from 'components/OfflineEmptyState/OfflineEmptyState';
@@ -41,15 +41,20 @@ const FirstScreenLoader = (props) => {
 					}
 					//Makes sure this user is subscribed to a topic
 					FirebaseFunctions.fcm.subscribeToTopic(user.uid);
-					const student = await FirebaseFunctions.getStudentByID(user.uid);
+					const student = await FirebaseFunctions.call('getStudentByID', { studentID: user.uid });
 					if (student !== -1) {
 						props.navigation.push('StudentCurrentClass', {
-							userID: user.uid,
+							studentID: user.uid,
+							classID: student.currentClassID
 						});
 						return;
 					}
+					const teacherObject = await FirebaseFunctions.call('getTeacherByID', {
+						teacherID: user.uid,
+					});
 					props.navigation.push('TeacherCurrentClass', {
-						userID: user.uid,
+						teacherID: user.uid,
+						classID: teacherObject.currentClassID,
 					});
 					return;
 				}
